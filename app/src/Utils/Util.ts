@@ -20,8 +20,8 @@ import { createInterface } from "readline";
 import { once } from "events";
 import * as os from "os";
 import * as Path from "path";
-import { LangExtensions } from "./LangExtensions";
-import Config from "Config/Config";
+import { LangExtensions } from "./LangExtensions.js";
+import Config from "../Config/Config.js";
 
 export default class Util {
   static allowedSpecialChars = new Set(["_", "."]);

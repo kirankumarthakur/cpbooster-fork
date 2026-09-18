@@ -1,8 +1,9 @@
 {
   "compilerOptions": {
-    "target": "es5",
-    "module": "commonjs",
-    "lib": ["es6"],
+    "target": "es2024",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "lib": ["es2024"],
     "allowJs": false,
     "outDir": "dist",
     "rootDir": ".",
@@ -13,10 +14,9 @@
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "plugins": [{ "transform": "@zerollup/ts-transform-paths" }],
-    "baseUrl": "src",
+    "types": ["node"],
     "paths": {}
   },
-  "exclude": ["website/*", "node_modules", "dist"],
+  "exclude": ["website/*", "node_modules", "dist", "**/*.test.ts", "**/__tests__"],
   "allowSyntheticDefaultImports": true
 }

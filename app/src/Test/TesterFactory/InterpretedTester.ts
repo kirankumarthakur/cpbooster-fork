@@ -16,9 +16,9 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import Config from "../../Config/Config";
-import { Veredict } from "../../Types/Veredict";
-import Tester from "./Tester";
+import Config from "../../Config/Config.js";
+import { Veredict } from "../../Types/Veredict.js";
+import Tester from "./Tester.js";
 
 export default class InterpretedTester extends Tester {
   constructor(config: Config, filePath: string) {

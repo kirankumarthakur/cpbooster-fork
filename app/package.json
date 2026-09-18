@@ -2,9 +2,9 @@
   "name": "cpbooster",
   "author": "searleser97",
   "version": "2.6.5",
-  "description": "cpbooster is a cross-platform CLI tool designed to boost competitive programmer's speed during contests by automating various routine tasks",
+  "description": "cpbooster is a cross-platform CLI tool for cloning contests, organizing files, and testing solutions locally",
   "homepage": "https://github.com/searleser97/cpbooster",
-  "repository": "github:searleser97/cpbooster",
+  "repository": "https://github.com/kirankumarthakur/cpbooster-fork",
   "keywords": [
     "competitive",
     "programming",
@@ -13,6 +13,7 @@
     "helper"
   ],
   "main": "dist/src/index.js",
+  "type": "module",
   "bin": {
     "cpbooster": "dist/src/index.js",
     "cpb": "dist/src/index.js"
@@ -21,11 +22,8 @@
   "scripts": {
     "start": "npm run build && node dist/index.js test -h",
     "start:dev": "nodemon",
-    "build": "rimraf ./dist && ttsc",
+    "build": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && tsc && node -e \"require('node:fs').chmodSync('dist/src/index.js', 0o755)\"",
     "install:dev": "npm run build && npm uninstall cpbooster -g && npm install -g",
-    "test": "jest",
-    "lint": "eslint . --ext .ts",
-    "lint-and-fix": "eslint . --ext .ts --fix",
     "prepublish": "npm run build",
     "version": "npm run build"
   },
@@ -34,34 +32,13 @@
   ],
   "license": "GPL-3.0-only",
   "devDependencies": {
-    "@types/chalk": "^2.2.0",
-    "@types/diff": "^4.0.2",
-    "@types/express": "^4.17.6",
-    "@types/jest": "^26.0.24",
-    "@types/node": "^14.0.14",
-    "@types/update-notifier": "^4.1.0",
-    "@types/yargs": "^15.0.5",
-    "@typescript-eslint/eslint-plugin": "^4.28.3",
-    "@typescript-eslint/parser": "^4.28.3",
-    "@zerollup/ts-transform-paths": "^1.7.18",
-    "eslint": "^7.31.0",
-    "eslint-config-prettier": "^8.3.0",
-    "eslint-plugin-prettier": "^3.4.0",
-    "jest": "^27.0.6",
-    "nodemon": "^2.0.4",
-    "prettier": "^2.3.2",
-    "rimraf": "^3.0.2",
-    "ts-jest": "^27.0.4",
-    "ts-node": "^8.10.2",
-    "ttypescript": "^1.5.15",
-    "typescript": "^3.9.6"
+    "@types/node": "^26.5.1",
+    "@types/yargs": "^17.0.35",
+    "nodemon": "^3.1.14",
+    "ts-node": "^10.9.2",
+    "typescript": "^7.0.2"
   },
   "dependencies": {
-    "chalk": "^4.1.0",
-    "express": "^4.17.1",
-    "open": "^8.0.8",
-    "playwright-chromium": "^1.30.0",
-    "update-notifier": "^4.1.0",
-    "yargs": "^15.4.0"
+    "yargs": "^18.1.0"
   }
 }

@@ -18,23 +18,31 @@
 import * as fs from "fs";
 import * as Path from "path";
 import * as os from "os";
-import Config from "../Config/Config";
-import Util from "../Utils/Util";
-import { buildLaunchCommand } from './BuildLaunchCommand';
-import chalk from "chalk";
+import Config from "../Config/Config.js";
+import Util from "../Utils/Util.js";
+import { buildLaunchCommand } from "./BuildLaunchCommand.js";
+import { styleText } from "node:util";
 import { spawn, spawnSync } from "child_process";
 import { exit } from "process";
 
 export default class SourceFileCreator {
   // The flag determines whether to open the file right after creating it, or not
-  static create(filePath: string, config: Config, openTerminal: boolean, timeLimitInMS = 3000, problemUrl?: string): void {
+  static create(
+    filePath: string,
+    config: Config,
+    openTerminal: boolean,
+    timeLimitInMS = 3000,
+    memoryLimitInMB?: number,
+    problemUrl?: string,
+    report = true
+  ): void {
     const absoluteFilePath = Path.isAbsolute(filePath) 
       ? filePath 
       : Path.resolve(process.cwd(), filePath);
     const fileDirectory = Path.dirname(absoluteFilePath);
     if (!fs.existsSync(fileDirectory)) {
     	console.error(
-    	  chalk.red(
+    	  styleText("red",
 			`The specified directory does not exist: ${fileDirectory}`
 		  )
 		);
@@ -51,10 +59,11 @@ export default class SourceFileCreator {
         match[0][1],
         match[0][idx - 1],
         timeLimitInMS,
+        memoryLimitInMB,
         problemUrl
       );
     } else {
-      this.createSingle(absoluteFilePath, config, timeLimitInMS, problemUrl);
+      this.createSingle(absoluteFilePath, config, timeLimitInMS, memoryLimitInMB, problemUrl, report);
     }
 
     if (openTerminal) {
@@ -72,7 +81,7 @@ export default class SourceFileCreator {
         }
       } else {
         console.log(
-          chalk.yellow(
+          styleText("yellow",
             "The terminal specified in the configuration " +
               "file is not fully supported yet, you will have to change your directory manually\n"
           )
@@ -85,17 +94,19 @@ export default class SourceFileCreator {
     filePath: string,
     config: Config,
     timeLimitInMS = 3000,
-    problemUrl?: string
-  ): void {
+    memoryLimitInMB?: number,
+    problemUrl?: string,
+    report = true
+  ): string {
     const langExtension = Util.getExtensionName(filePath);
     const filename = Util.normalizeFileName(Path.basename(filePath));
     filePath = Path.join(Path.dirname(filePath), filename);
     let template = "";
     const commentString = Util.getCommentString(langExtension, config);
     if (commentString) {
-      template += `${commentString} time-limit: ${timeLimitInMS}\n`;
+      template += `${commentString} time-limit: ${timeLimitInMS}, memory-limit: ${memoryLimitInMB ?? "xyz"}\n`;
       if (problemUrl) {
-        template += `${commentString} problem-url: ${problemUrl}\n`;
+        template += `${commentString} problem-url ${problemUrl}\n`;
       }
     }
     const langConfig = config.languages[langExtension];
@@ -105,10 +116,11 @@ export default class SourceFileCreator {
 
     if (!fs.existsSync(filePath)) {
       fs.writeFileSync(filePath, template);
-      console.info("Source file", filename, "created.");
-    } else {
-      console.info("Source file", filename, "already existed.");
+      if (report) console.info(`Source file "${filePath}" created.`);
+    } else if (report) {
+      console.info(`Source file "${filePath}" already existed.`);
     }
+    return fs.realpathSync(filePath);
   }
 
   static createMultiple(
@@ -117,7 +129,9 @@ export default class SourceFileCreator {
     start: string,
     end: string,
     timeLimitInMS = 3000,
-    problemUrl?: string
+    memoryLimitInMB?: number,
+    problemUrl?: string,
+    report = true
   ): void {
     if (start.length != 1 || end.length != 1) {
       throw new Error("incorrect format of start or end, it should be a single character");
@@ -134,7 +148,7 @@ export default class SourceFileCreator {
       filePaths.push(Path.join(dirname, String.fromCharCode(i) + extension));
     }
     for (filePath of filePaths) {
-      SourceFileCreator.createSingle(filePath, config, timeLimitInMS, problemUrl);
+      SourceFileCreator.createSingle(filePath, config, timeLimitInMS, memoryLimitInMB, problemUrl, report);
     }
   }
 }

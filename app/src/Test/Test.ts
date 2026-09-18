@@ -16,10 +16,11 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import Config from "../Config/Config";
-import ICommandGlobalArgs from "../Types/ICommandGlobalArgs";
-import Tester from "./TesterFactory/Tester";
-import TesterFactory from "./TesterFactory/TesterFactory";
+import Config from "../Config/Config.js";
+import ICommandGlobalArgs from "../Types/ICommandGlobalArgs.js";
+import Tester from "./TesterFactory/Tester.js";
+import TesterFactory from "./TesterFactory/TesterFactory.js";
+import { Worker } from "node:worker_threads";
 
 export interface ICommandTestArgs extends ICommandGlobalArgs {
   filePath: string;
@@ -29,7 +30,7 @@ export interface ICommandTestArgs extends ICommandGlobalArgs {
   add?: boolean;
 }
 
-export function test(args: ICommandTestArgs): void {
+export function runTestInCurrentThread(args: ICommandTestArgs): void {
   const config = Config.read(args.configPath);
   if (args.add) {
     Tester.createTestCase(args.filePath);
@@ -43,4 +44,22 @@ export function test(args: ICommandTestArgs): void {
       else tester.testAll(!args.noCompile);
     }
   }
+}
+
+export function test(args: ICommandTestArgs): Promise<void> {
+  if (args.add) {
+    runTestInCurrentThread(args);
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(new URL("./TestWorker.js", import.meta.url), {
+      workerData: args
+    });
+    worker.once("error", reject);
+    worker.once("exit", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`Test worker exited with code ${code}`));
+    });
+  });
 }

@@ -16,8 +16,8 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import ICommandGlobalArgs from "../Types/ICommandGlobalArgs";
-import Config from "../Config/Config";
+import ICommandGlobalArgs from "../Types/ICommandGlobalArgs.js";
+import Config from "../Config/Config.js";
 
 export function init(args: ICommandGlobalArgs): void {
   Config.write(args.configPath);

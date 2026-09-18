@@ -16,9 +16,9 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import Config from "../Config/Config";
-import ICommandGlobalArgs from "../Types/ICommandGlobalArgs";
-import CCServer from "./CCServer";
+import Config from "../Config/Config.js";
+import ICommandGlobalArgs from "../Types/ICommandGlobalArgs.js";
+import CCServer from "./CCServer.js";
 
 export interface ICommandCloneArgs extends ICommandGlobalArgs {
   here?: boolean;

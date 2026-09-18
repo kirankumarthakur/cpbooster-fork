@@ -18,29 +18,16 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import updateNotifier from "update-notifier";
-import yargs from "yargs";
+import yargs from "yargs/yargs";
+import { hideBin } from "yargs/helpers";
 import * as os from "os";
 import * as Path from "path";
-import ICommandGlobalArgs from "./Types/ICommandGlobalArgs";
-import { ICommandCloneArgs, clone } from "./Clone/Clone";
-import { ICommandTestArgs, test } from "./Test/Test";
-import { create, ICommandCreateArgs } from "./Create/Create";
-import { init } from "./Init/Init";
-import { ICommandLoginArgs, login } from "./Login/Login";
-import { ICommandSubmitArgs, submit } from "./Submit/Submit";
-import { ICommandStatArgs, stat } from "./Stat/Stat";
-
-import * as pkg from "../package.json";
-
-updateNotifier({
-  pkg: pkg,
-  shouldNotifyInNpmScript: true,
-  updateCheckInterval: 1000 * 60 * 60 * 2 // 2 hrs
-}).notify({
-  isGlobal: true,
-  defer: false
-});
+import ICommandGlobalArgs from "./Types/ICommandGlobalArgs.js";
+import { ICommandCloneArgs, clone } from "./Clone/Clone.js";
+import { ICommandTestArgs, test } from "./Test/Test.js";
+import { create, ICommandCreateArgs } from "./Create/Create.js";
+import { init } from "./Init/Init.js";
+import { ICommandStatArgs, stat } from "./Stat/Stat.js";
 
 const descriptions = {
   clone: "Run cpbooster as server for competitive companion plugin.",
@@ -48,13 +35,10 @@ const descriptions = {
   create:
     "Create a new source code file with the corresponding template loaded or multiple source files if a sequence is given as file name.",
   init: "Create a new configuration file with default values in $HOME directory or if --configPath is specified, it writes it in the given path.",
-  login: "Log in to the specified Online Judge (i.e. Codeforces, AtCoder, ...).",
-  submit:
-    "Submit a source code file as a solution to a problem in an Online Judge (i.e. Codeforces, AtCoder, ...).",
   stat: "Outputs useful information about the specified problem/file in a format that is easy to parse from other tools"
 };
 
-yargs
+yargs(hideBin(process.argv))
   .usage(
     "\nUsage: $0 <command> [options]\n\nRun `$0 <command> --help` to show help for an specific command."
   )
@@ -168,45 +152,6 @@ yargs
         });
     },
     (argv) => init(argv as unknown as ICommandGlobalArgs)
-  )
-  .command(
-    ["login <url>", "l"],
-    descriptions.login,
-    (new_yargs) => {
-      new_yargs
-        .usage(
-          "\n" +
-            descriptions.login +
-            " The name of the Online Judge can be given instead of <url>." +
-            "\n\nUsage: $0 login <url>"
-        )
-        .fail((msg: string, _, yargs) => {
-          yargs.showHelp();
-          if (msg === "Not enough non-option arguments: got 0, need at least 1") {
-            console.log("\nMissing <url> in arguments");
-          } else {
-            console.log("\n" + msg);
-          }
-        });
-    },
-    (argv) => login(argv as unknown as ICommandLoginArgs)
-  )
-  .command(
-    ["submit <filePath> [url]", "s"],
-    descriptions.submit,
-    (new_yargs) => {
-      new_yargs
-        .usage("\n" + descriptions.submit + "\n\nUsage: $0 submit <filePath> [url]")
-        .fail((msg: string, _, yargs) => {
-          yargs.showHelp();
-          if (msg === "Not enough non-option arguments: got 0, need at least 1") {
-            console.log("\nMissing <filePath> in arguments");
-          } else {
-            console.log("\n" + msg);
-          }
-        });
-    },
-    (argv) => submit(argv as unknown as ICommandSubmitArgs)
   )
   .command(
     ["stat <filePath>"],

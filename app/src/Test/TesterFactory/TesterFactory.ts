@@ -15,15 +15,15 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-import Config from "../../Config/Config";
-import CompiledTester from "./CompiledTester";
+import Config from "../../Config/Config.js";
+import CompiledTester from "./CompiledTester.js";
 import { exit } from "process";
 import * as fs from "fs";
-import InterpretedTester from "./InterpretedTester";
-import Tester from "./Tester";
-import { LangExtensions } from "../../Utils/LangExtensions";
-import Util from "../../Utils/Util";
-import MixedTester from "Test/TesterFactory/MixedTester";
+import InterpretedTester from "./InterpretedTester.js";
+import Tester from "./Tester.js";
+import { LangExtensions } from "../../Utils/LangExtensions.js";
+import Util from "../../Utils/Util.js";
+import MixedTester from "./MixedTester.js";
 
 export default class TesterFactory {
   static compiledExtensions = new Set([

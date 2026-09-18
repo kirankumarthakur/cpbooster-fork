@@ -16,15 +16,15 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import Config from "../../Config/Config";
-import { Veredict } from "../../Types/Veredict";
-import Tester from "./Tester";
-import chalk from "chalk";
+import Config from "../../Config/Config.js";
+import { Veredict } from "../../Types/Veredict.js";
+import Tester from "./Tester.js";
+import { styleText } from "node:util";
 import * as Path from "path";
 import * as fs from "fs";
 import { exit } from "process";
-import CompiledTester from "./CompiledTester";
-import { LangExtensions } from "Utils/LangExtensions";
+import CompiledTester from "./CompiledTester.js";
+import { LangExtensions } from "../../Utils/LangExtensions.js";
 
 export default class MixedTester extends Tester {
   constructor(config: Config, filePath: string) {
@@ -51,7 +51,7 @@ export default class MixedTester extends Tester {
       if (!fs.existsSync(executableFileName)) {
         result = {
           status: false,
-          feedback: `${chalk.red(
+          feedback: `${styleText("red",
             "Error:"
           )} Executable ${executableFileName} not found, Is your class name same as the file name ?`
         };
@@ -101,7 +101,7 @@ export default class MixedTester extends Tester {
       }
     } else if (!fs.existsSync(executableFileName)) {
       console.log(
-        chalk.red("Error:"),
+        styleText("red", "Error:"),
         `Executable ${executableFileName} not found, Is your class name same as the file name?`
       );
       exit(0);
@@ -127,7 +127,7 @@ export default class MixedTester extends Tester {
       }
     } else if (!fs.existsSync(executableFileName)) {
       console.log(
-        chalk.red("Error:"),
+        styleText("red", "Error:"),
         `Executable ${executableFileName} not found, Is your class name same as the file name?`
       );
       exit(0);

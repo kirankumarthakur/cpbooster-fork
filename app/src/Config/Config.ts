@@ -20,8 +20,8 @@ import * as fs from "fs";
 import * as Path from "path";
 import * as os from "os";
 import { exit } from "process";
-import { LangConfig } from "./Types/LangConfig";
-import Util from "../Utils/Util";
+import { LangConfig } from "./Types/LangConfig.js";
+import Util from "../Utils/Util.js";
 
 export default class Config {
   static readonly defaultConfigFilePaths = [
@@ -35,8 +35,6 @@ export default class Config {
   terminal: string | undefined | null;
   editor: string;
   closeAfterClone: boolean;
-  showStatusPageOnSubmit: boolean;
-  useUserDefaultBrowser: boolean;
   createContestPlatformDirectory: boolean;
   // preferred language extension
   preferredLang: string;
@@ -53,8 +51,6 @@ export default class Config {
     this.port = 1327;
     this.editor = "konsole";
     this.closeAfterClone = false;
-    this.showStatusPageOnSubmit = true;
-    this.useUserDefaultBrowser = true;
     this.createContestPlatformDirectory = true;
     this.preferredLang = "cpp";
     this.hideTestCaseInput = false;
@@ -67,17 +63,6 @@ export default class Config {
         template: "",
         command: "g++ -std=gnu++17 -O2",
         debugCommand: "g++ -std=gnu++17 -DDEBUG -Wshadow -Wall",
-        aliases: {
-          codeforces: "54",
-          ucup: "C++23",
-          qoj: "C++23",
-          universaloj: "C++20",
-          tlx: "C++20",
-          atcoder: "5001",
-          omegaup: "cpp17-gcc",
-          szkopul: "C++",
-          yandex: "gcc7_3"
-        },
         type: "compiled",
         commentString: "//"
       },
@@ -85,16 +70,6 @@ export default class Config {
         template: "",
         command: "python3",
         debugCommand: "python3 -O",
-        aliases: {
-          codeforces: "31",
-          ucup: "Python3",
-          qoj: "Python3",
-          universaloj: "Python3",
-          tlx: "PyPy 3",
-          atcoder: "4006",
-          omegaup: "py3",
-          szkopul: "Python"
-        },
         type: "interpreted",
         commentString: "#"
       },
@@ -103,14 +78,6 @@ export default class Config {
         command: "javac",
         debugCommand: "javac",
         runCommand: "java",
-        aliases: {
-          codeforces: "36",
-          ucup: "Java11",
-          qoj: "Java11",
-          universaloj: "Java17",
-          tlx: "Java 11",
-          atcoder: "4005"
-        },
         type: "mixed",
         commentString: "//"
       },
@@ -118,10 +85,6 @@ export default class Config {
         template: "",
         command: "node",
         debugCommand: "node",
-        aliases: {
-          codeforces: "55",
-          atcoder: "4030"
-        },
         type: "interpreted",
         commentString: "//"
       },
@@ -129,10 +92,6 @@ export default class Config {
         template: "",
         command: "ruby",
         debugCommand: "ruby",
-        aliases: {
-          codeforces: "67",
-          atcoder: "4049"
-        },
         type: "interpreted",
         commentString: "#"
       },
@@ -140,11 +99,6 @@ export default class Config {
         template: "",
         command: "msc",
         debugCommand: "msc",
-        aliases: {
-          codeforces: "55",
-          atcoder: "4030",
-          omegaup: "cs"
-        },
         type: "compiled",
         commentString: "//"
       },
@@ -152,13 +106,6 @@ export default class Config {
         template: "",
         command: "rustc",
         debugCommand: "rustc",
-        aliases: {
-          codeforces: "49",
-          ucup: "Rust",
-          qoj: "Rust",
-          tlx: "Rust 2021",
-          atcoder: "4050"
-        },
         type: "compiled",
         commentString: "//"
       },
@@ -166,11 +113,6 @@ export default class Config {
         template: "",
         command: "go build",
         debugCommand: "go build",
-        aliases: {
-          codeforces: "32",
-          tlx: "Go",
-          atcoder: "4026"
-        },
         type: "compiled",
         commentString: "//"
       },
@@ -179,10 +121,6 @@ export default class Config {
         command: "kotlinc",
         debugCommand: "kotlinc",
         runCommand: "kotlin",
-        aliases: {
-          codeforces: "48",
-          atcoder: "4032"
-        },
         type: "mixed"
       },
       scala: {
@@ -190,10 +128,6 @@ export default class Config {
         command: "scalac",
         debugCommand: "scalac",
         runCommand: "scala",
-        aliases: {
-          codeforces: "20",
-          atcoder: "4051"
-        },
         type: "mixed"
       }
     };

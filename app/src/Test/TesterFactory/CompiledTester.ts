@@ -16,16 +16,16 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import Config from "../../Config/Config";
+import Config from "../../Config/Config.js";
 import * as Path from "path";
 import * as fs from "fs";
 import * as os from "os";
-import chalk from "chalk";
-import Util from "../../Utils/Util";
+import { styleText } from "node:util";
+import Util from "../../Utils/Util.js";
 import { spawnSync } from "child_process";
 import { exit } from "process";
-import { Veredict } from "../../Types/Veredict";
-import Tester from "./Tester";
+import { Veredict } from "../../Types/Veredict.js";
+import Tester from "./Tester.js";
 
 // Todo: If the list increases significantly, creating a Set containing
 // the enum values would be reasonable for quick access.
@@ -45,14 +45,13 @@ export default class CompiledTester extends Tester {
   }
 
   testOne(testId: number, shouldCompile: boolean): Veredict {
-    const binaryFileName = this.getExecutableFileNameOrDefault(false);
-    const binaryFilePath = `.${Path.sep}${binaryFileName}`;
+    const binaryFilePath = this.getExecutableFilePath(false);
     const hasValidConditions = (): { status: boolean; feedback: string } => {
       let result = { status: true, feedback: "" };
       if (!fs.existsSync(binaryFilePath)) {
         result = {
           status: false,
-          feedback: `${chalk.red("Error:")} Executable ${binaryFilePath} not found`
+          feedback: `${styleText("red", "Error:")} Executable ${binaryFilePath} not found`
         };
       }
       return result;
@@ -70,8 +69,7 @@ export default class CompiledTester extends Tester {
   }
 
   debugOne(testId: number, compile: boolean): void {
-    const binaryFileName = this.getExecutableFileNameOrDefault(true);
-    const binaryFilePath = `.${Path.sep}${binaryFileName}`;
+    const binaryFilePath = this.getExecutableFilePath(true);
     if (compile) {
       const { status, feedback } = this.compile(true);
       if (!status) {
@@ -79,15 +77,14 @@ export default class CompiledTester extends Tester {
         exit(0);
       }
     } else if (!fs.existsSync(binaryFilePath)) {
-      console.log(chalk.red("Error:"), `Executable ${binaryFilePath} not found`);
+      console.log(styleText("red", "Error:"), `Executable ${binaryFilePath} not found`);
       exit(0);
     }
     this.runDebug(binaryFilePath, [], testId);
   }
 
   debugWithUserInput(compile: boolean): void {
-    const binaryFileName = this.getExecutableFileNameOrDefault(true);
-    const binaryFilePath = `.${Path.sep}${binaryFileName}`;
+    const binaryFilePath = this.getExecutableFilePath(true);
     if (compile) {
       const { status, feedback } = this.compile(true);
       if (!status) {
@@ -95,7 +92,7 @@ export default class CompiledTester extends Tester {
         exit(0);
       }
     } else if (!fs.existsSync(binaryFilePath)) {
-      console.log(chalk.red("Error:"), `Executable ${binaryFilePath} not found`);
+      console.log(styleText("red", "Error:"), `Executable ${binaryFilePath} not found`);
       exit(0);
     }
     this.runDebugWithUserInput(binaryFilePath);
@@ -129,11 +126,18 @@ export default class CompiledTester extends Tester {
       fileExtension = fileExtension.replace(/\s+/g, '').replace(/^\./, '');
       defaultName += "." + fileExtension;
     }
-    return defaultName;
+    return Path.join(Path.dirname(this.filePath), defaultName);
   }
 
   getExecutableFileNameOrDefault(debug: boolean): string {
     return this.getExecutableFileName(debug) ?? this.getDefaultExecutableFileName(debug);
+  }
+
+  private getExecutableFilePath(debug: boolean): string {
+    const executableFileName = this.getExecutableFileNameOrDefault(debug);
+    return Path.isAbsolute(executableFileName)
+      ? executableFileName
+      : Path.resolve(process.cwd(), executableFileName);
   }
 
   static getFileNameOptionForCompilerCommand(compilerCommand: string): string {
@@ -156,8 +160,8 @@ export default class CompiledTester extends Tester {
       let compileStderr = Buffer.from(compilation.stderr).toString("utf8").trim();
       if (compileStderr !== "") {
         // TODO: replace with regex instead of split and join ignoring case
-        compileStderr = compileStderr.split("error").join(chalk.redBright("error"));
-        compileStderr = compileStderr.split("warning").join(chalk.blueBright("warning"));
+        compileStderr = compileStderr.split("error").join(styleText("red", "error"));
+        compileStderr = compileStderr.split("warning").join(styleText("blue", "warning"));
         // TODO: replace with regex match ignoring case
         if (compileStderr.includes("error")) {
           result.status = false;

@@ -16,20 +16,55 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import Config from "../../Config/Config";
-import { Veredict } from "../../Types/Veredict";
-import Util from "../../Utils/Util";
+import Config from "../../Config/Config.js";
+import { Veredict } from "../../Types/Veredict.js";
+import Util from "../../Utils/Util.js";
 import * as fs from "fs";
 import os from "os";
 import { exit } from "process";
-import chalk from "chalk";
+import { styleText } from "node:util";
 import { spawnSync } from "child_process";
 import * as Path from "path";
+
+type ExecutionMetrics = {
+  elapsedSeconds: number;
+  memoryMegabytes: number | undefined;
+};
+type CardColor = "blue" | "mauve" | "green" | "red" | "yellow" | "cyan" | "maroon" | "peach";
+
+const cardColors: Record<CardColor, string> = {
+  blue: "137;180;250",
+  mauve: "203;166;247",
+  green: "166;227;161",
+  red: "243;139;168",
+  yellow: "249;226;175",
+  cyan: "137;220;235",
+  maroon: "139;63;70",
+  peach: "250;179;135"
+};
+
+function card(text: string, color: CardColor): string {
+  return `\u001b[38;2;0;0;0m\u001b[48;2;${cardColors[color]}m${text}\u001b[0m`;
+}
+
+function underlinedHeader(text: string, color: CardColor): string {
+  return `\u001b[1;4;38;2;${cardColors[color]}m${text}\u001b[0m`;
+}
+
+function metricValue(text: string, withinLimit: boolean | undefined): string {
+  if (withinLimit === undefined) return text;
+  return `\u001b[38;2;${cardColors[withinLimit ? "green" : "red"]}m${text}\u001b[0m`;
+}
 
 export default abstract class Tester {
   config: Config;
   filePath: string;
   langExtension: string;
+  private latestExecutionMetrics: ExecutionMetrics | undefined;
+  private latestOutput = "";
+  private latestExpectedOutput: string | undefined;
+  private slowestExecutionSeconds = 0;
+  private maximumMemoryMegabytes = 0;
 
   constructor(config: Config, filePath: string) {
     if (!fs.existsSync(filePath)) {
@@ -53,22 +88,26 @@ export default abstract class Tester {
       console.log("No testcases available for this file:", this.filePath);
       exit(0);
     }
+    const verdictCounts = new Map<Veredict, number>();
     let veredict = this.testOne(testcasesIds[0], compile);
+    verdictCounts.set(veredict, 1);
     if (veredict === Veredict.CE || veredict === Veredict.ERROR) {
       exit(0);
     }
-    let acCnt = veredict === Veredict.AC || veredict === Veredict.AC_WHEN_TRIMMED ? 1 : 0;
     for (let i = 1; i < testcasesIds.length; i++) {
       veredict = this.testOne(testcasesIds[i], false);
-      acCnt += veredict === Veredict.AC || veredict === Veredict.AC_WHEN_TRIMMED ? 1 : 0;
+      verdictCounts.set(veredict, (verdictCounts.get(veredict) ?? 0) + 1);
     }
-    Tester.printScore(acCnt, testcasesIds.length);
+    this.printScore(verdictCounts, testcasesIds.length);
   }
 
   extractTimeLimit(): number {
     const text = fs.readFileSync(this.filePath).toString();
     const commentString = Util.getCommentString(this.langExtension, this.config);
-    const re = new RegExp(String.raw`^\s*${commentString}\s*time-limit\s*:\s*([0-9]+)\s*$`, "gm");
+    const re = new RegExp(
+      String.raw`^\s*${commentString}\s*time-limit\s*:\s*([0-9]+)(?:\s*,\s*memory-limit\s*:\s*[0-9]+(?:\.[0-9]+)?)?\s*$`,
+      "m"
+    );
     const match = re.exec(text);
     let time = 3000; // Default time
     if (match) {
@@ -77,19 +116,30 @@ export default abstract class Tester {
     return time;
   }
 
+  extractMemoryLimit(): number | undefined {
+    const text = fs.readFileSync(this.filePath).toString();
+    const commentString = Util.getCommentString(this.langExtension, this.config);
+    const re = new RegExp(
+      String.raw`^\s*${commentString}\s*(?:time-limit\s*:\s*[0-9]+\s*,\s*)?memory-limit\s*:\s*([0-9]+(?:\.[0-9]+)?)\s*$`,
+      "m"
+    );
+    const match = re.exec(text);
+    return match ? Number(match[1]) : undefined;
+  }
+
   getFormattedVeredict(veredict: Veredict): string {
     switch (veredict) {
       case Veredict.AC:
       case Veredict.AC_WHEN_TRIMMED:
-        return chalk.bgGreen(chalk.whiteBright(" A C "));
+        return underlinedHeader("AC", "green");
       case Veredict.WA:
-        return chalk.bgRed(chalk.whiteBright(" W A "));
+        return underlinedHeader("WA", "red");
       case Veredict.RTE:
-        return chalk.bgBlue(chalk.whiteBright(" R T E "));
+        return underlinedHeader("RTE", "blue");
       case Veredict.TLE:
-        return chalk.bgHex("#8d42f5")(chalk.whiteBright(" T L E "));
+        return underlinedHeader("TLE", "mauve");
       case Veredict.CE:
-        return chalk.bgYellow(chalk.whiteBright(" Compilation Error "));
+        return underlinedHeader("CE", "yellow");
       default:
         return "UNDETERMINED";
     }
@@ -97,29 +147,98 @@ export default abstract class Tester {
 
   printTestResults(veredict: Veredict, feedback: string, testId: number): void {
     if (veredict !== Veredict.CE) {
-      console.log(`Test Case ${testId}:`, this.getFormattedVeredict(veredict) + "\n");
+      const metrics = this.latestExecutionMetrics;
+      const memoryLimit = this.extractMemoryLimit();
+      const metricText = metrics
+        ? ` | Time: ${metricValue(
+            `${metrics.elapsedSeconds.toFixed(6)} sec`,
+            metrics.elapsedSeconds * 1000 <= this.extractTimeLimit()
+          )} | Memory: ${
+            metrics.memoryMegabytes === undefined
+              ? "unavailable"
+              : metricValue(
+                  `${metrics.memoryMegabytes.toFixed(6)} MB`,
+                  memoryLimit === undefined ? undefined : metrics.memoryMegabytes <= memoryLimit
+                )
+          }`
+        : "";
+      console.log(
+        card(` Test Case ${testId} `, "peach"),
+        "│",
+        this.getFormattedVeredict(veredict),
+        metricText
+      );
       if (!this.config.hideTestCaseInput) {
         const input = fs.readFileSync(Tester.getInputPath(this.filePath, testId)).toString();
-        console.log(`${chalk.bgWhite(chalk.black(" Input "))}\n`);
+        console.log(underlinedHeader("Input", "blue"));
         const inputLines = input.split(/\n|\r\n/);
         if (
           this.config.maxLinesToShowFromInput === 0 ||
           inputLines.length <= this.config.maxLinesToShowFromInput
         ) {
-          console.log(inputLines.join(os.EOL) + os.EOL);
+          console.log(inputLines.join(os.EOL).trimEnd());
         } else {
           const reducedInputLines = [
             ...inputLines.slice(0, this.config.maxLinesToShowFromInput),
             "... (the rest of the input is hidden)"
           ].join(os.EOL);
-          console.log(reducedInputLines + os.EOL);
+          console.log(reducedInputLines);
         }
+        console.log();
+      }
+      if (this.latestExpectedOutput !== undefined) {
+        this.printOutputComparison();
+      } else {
+        console.log(underlinedHeader("Your Output", "blue"));
+        console.log(this.latestOutput.trimEnd());
       }
     } else {
-      console.log(this.getFormattedVeredict(veredict) + "\n");
+      console.log(card(" Test Case ", "peach"), this.getFormattedVeredict(veredict));
     }
 
-    console.log(feedback);
+    if (feedback.trim()) console.log(`\n${feedback.trimEnd()}`);
+    console.log(styleText("gray", "─".repeat(Math.min(process.stdout.columns || 80, 100))));
+  }
+
+  private printOutputComparison(): void {
+    const actualLines = this.latestOutput.trimEnd().split(/\r?\n/);
+    const expectedLines = (this.latestExpectedOutput ?? "").trimEnd().split(/\r?\n/);
+    const terminalWidth = Math.min(process.stdout.columns || 80, 100);
+    const separatorWidth = 3;
+    const minimumColumnWidth = 12;
+    const maximumColumnWidth = 48;
+    const availableWidth = Math.max(2 * minimumColumnWidth + separatorWidth, terminalWidth - separatorWidth);
+    const actualWidth = Math.min(
+      maximumColumnWidth,
+      Math.max(minimumColumnWidth, Math.max(" Your Output ".length, ...actualLines.map((line) => line.length)))
+    );
+    const expectedWidth = Math.min(
+      maximumColumnWidth,
+      Math.max(minimumColumnWidth, Math.max(" Actual Output ".length, ...expectedLines.map((line) => line.length)))
+    );
+    let columnWidths = [actualWidth, expectedWidth];
+    if (actualWidth + expectedWidth > availableWidth) {
+      const targetWidth = Math.floor((availableWidth - minimumColumnWidth * 2) / 2);
+      columnWidths = [
+        Math.max(minimumColumnWidth, Math.min(actualWidth, targetWidth + minimumColumnWidth)),
+        Math.max(minimumColumnWidth, Math.min(expectedWidth, availableWidth - separatorWidth - (targetWidth + minimumColumnWidth)))
+      ];
+    }
+    const [actualColumnWidth, expectedColumnWidth] = columnWidths;
+    const fit = (line: string, width: number): string =>
+      line.length > width ? `${line.slice(0, Math.max(0, width - 1))}…` : line.padEnd(width);
+    console.log(
+      underlinedHeader(fit("Your Output", actualColumnWidth), "blue") +
+        " │ " +
+        underlinedHeader(fit("Actual Output", expectedColumnWidth), "mauve")
+    );
+    for (let index = 0; index < Math.max(actualLines.length, expectedLines.length); index++) {
+      console.log(
+        fit(actualLines[index] ?? "", actualColumnWidth) +
+          " │ " +
+          fit(expectedLines[index] ?? "", expectedColumnWidth)
+      );
+    }
   }
 
   protected runDebug(execCommand: string, args: string[], testId: number): void {
@@ -136,7 +255,7 @@ export default abstract class Tester {
 
     if (execution.stderr.toString()) {
       console.log(
-        Util.replaceAll(execution.stderr.toString(), "runtime error", chalk.red("runtime error"))
+        Util.replaceAll(execution.stderr.toString(), "runtime error", styleText("red", "runtime error"))
       );
     }
   }
@@ -165,10 +284,8 @@ export default abstract class Tester {
       feedback += preConditionState.feedback;
       finalVeredict = Veredict.ERROR;
     } else {
-      const execution = spawnSync(execCommand, args, {
-        input: fs.readFileSync(Tester.getInputPath(this.filePath, testId)),
-        timeout: this.extractTimeLimit() + 500
-      });
+      const execution = this.executeWithMetrics(execCommand, args, testId);
+      this.latestExecutionMetrics = execution.metrics;
       // TODO: Extract logic of each condition to small functions
       if (execution.error?.message.includes("ETIMEDOUT")) {
         finalVeredict = Veredict.TLE;
@@ -182,9 +299,12 @@ export default abstract class Tester {
         if (fs.existsSync(answerFilePath)) {
           let output = execution.stdout?.toString() ?? "";
           const ans = fs.readFileSync(answerFilePath).toString();
+          this.latestOutput = output;
+          this.latestExpectedOutput = ans;
           if(Util.isWindows()){
             output = output.replace(/\r\n/g, "\n");
           }
+
           const trimmedOutput = output.trim();
           const trimmedAns = ans.trim();
           const outputLines = trimmedOutput.split("\n");
@@ -205,18 +325,18 @@ export default abstract class Tester {
 
           if (isTrimmedOutputSame) {
             if (ans !== output) {
-              feedback += chalk.yellow("Check leading and trailing blank spaces") + "\n\n";
+              feedback += styleText("yellow", "Check leading and trailing blank spaces") + "\n\n";
               finalVeredict = Veredict.AC_WHEN_TRIMMED;
             } else {
               finalVeredict = Veredict.AC;
             }
-            feedback += chalk.bgGreen(chalk.whiteBright(" Your Output ")) + "\n\n";
-            feedback += output;
           } else {
-            feedback += getOutputDiff(outputLines, ansLines);
+            feedback += getMismatchMessage(trimmedOutputLines, trimmedAnsLines);
             finalVeredict = Veredict.WA;
           }
         } else {
+          this.latestOutput = execution.stdout?.toString() ?? "";
+          this.latestExpectedOutput = undefined;
           feedback += `answer file not found in ${answerFilePath}\n`;
           finalVeredict = Veredict.RTE;
         }
@@ -227,6 +347,90 @@ export default abstract class Tester {
     return {
       veredict: finalVeredict,
       feedback
+    };
+  }
+
+  private executeWithMetrics(
+    execCommand: string,
+    args: string[],
+    testId: number
+  ): { stdout: Buffer; stderr: Buffer; status: number | null; error?: Error; metrics: ExecutionMetrics } {
+    const input = fs.readFileSync(Tester.getInputPath(this.filePath, testId));
+    const timeout = this.extractTimeLimit() + 500;
+    const hyperfinePath = "/usr/bin/hyperfine";
+    let stdout = Buffer.alloc(0);
+    let status: number | null = null;
+    let error: Error | undefined;
+    let elapsedSeconds: number;
+    let memoryMegabytes: number | undefined;
+    let stderr: Buffer;
+
+    if (!Util.isWindows() && fs.existsSync(hyperfinePath)) {
+      const start = process.hrtime.bigint();
+      const tempDirectory = fs.mkdtempSync(Path.join(os.tmpdir(), "cpbooster-"));
+      const inputPath = Path.join(tempDirectory, "input");
+      const stdoutPath = Path.join(tempDirectory, "stdout");
+      const stderrPath = Path.join(tempDirectory, "stderr");
+      const resultPath = Path.join(tempDirectory, "result.json");
+      fs.writeFileSync(inputPath, input);
+      const shellQuote = (value: string): string => `'${value.replace(/'/g, "'\\''")}'`;
+      const command = [
+        ...[execCommand, ...args].map(shellQuote),
+        `< ${shellQuote(inputPath)}`,
+        `> ${shellQuote(stdoutPath)}`,
+        `2> ${shellQuote(stderrPath)}`
+      ].join(" ");
+      const execution = spawnSync(
+        hyperfinePath,
+        ["--runs", "1", "--warmup", "0", "--export-json", resultPath, command],
+        { timeout }
+      );
+      stderr = fs.readFileSync(stderrPath);
+      stdout = fs.readFileSync(stdoutPath);
+      elapsedSeconds = Number(process.hrtime.bigint() - start) / 1_000_000_000;
+      status = execution.status;
+      error = execution.error;
+      const resultText = fs.existsSync(resultPath) ? fs.readFileSync(resultPath, "utf8").trim() : "";
+      if (resultText) {
+        try {
+          const result = JSON.parse(resultText) as {
+            results: Array<{ mean: number; memory_usage_byte?: number[]; exit_codes?: number[] }>;
+          };
+          const benchmark = result.results[0];
+          if (benchmark) {
+            elapsedSeconds = benchmark.mean;
+            memoryMegabytes = benchmark.memory_usage_byte?.[0] === undefined
+              ? undefined
+              : benchmark.memory_usage_byte[0] / (1024 * 1024);
+            status = benchmark.exit_codes?.[0] ?? execution.status;
+          }
+        } catch (parseError) {
+          if (!(parseError instanceof SyntaxError)) {
+            throw parseError;
+          }
+        }
+      }
+      fs.rmSync(tempDirectory, { recursive: true, force: true });
+    } else {
+      const start = process.hrtime.bigint();
+      const execution = spawnSync(execCommand, args, { input, timeout });
+      stdout = execution.stdout ?? Buffer.alloc(0);
+      stderr = execution.stderr ?? Buffer.alloc(0);
+      status = execution.status;
+      error = execution.error;
+      elapsedSeconds = Number(process.hrtime.bigint() - start) / 1_000_000_000;
+    }
+    const metrics = { elapsedSeconds, memoryMegabytes };
+    this.slowestExecutionSeconds = Math.max(this.slowestExecutionSeconds, elapsedSeconds);
+    if (memoryMegabytes !== undefined) {
+      this.maximumMemoryMegabytes = Math.max(this.maximumMemoryMegabytes, memoryMegabytes);
+    }
+    return {
+      stdout,
+      stderr,
+      status,
+      error,
+      metrics
     };
   }
 
@@ -299,20 +503,40 @@ export default abstract class Tester {
     console.log("\nTest case", thisTCId, "written.");
   }
 
-  static printScore(ac: number, total: number): void {
-    const plainmsg = `| ${ac.toString()} / ${total} AC |`;
-    let msg = `| ${ac.toString()} / ${total} ${chalk.greenBright("AC")} |`;
-    if (ac == total) msg += " 🎉🎉🎉";
-    const summary = "Summary: ";
-    console.log();
-    console.log(Util.repeat(" ", summary.length) + Util.repeat("+", plainmsg.length));
-    console.log(summary + msg);
-    console.log(Util.repeat(" ", summary.length) + Util.repeat("+", plainmsg.length));
-    console.log();
+  printScore(verdictCounts: Map<Veredict, number>, total: number): void {
+    const labels: Array<[Veredict, string, CardColor]> = [
+      [Veredict.AC, "AC", "green"],
+      [Veredict.AC_WHEN_TRIMMED, "AC", "green"],
+      [Veredict.WA, "WA", "red"],
+      [Veredict.RTE, "RTE", "blue"],
+      [Veredict.TLE, "TLE", "mauve"],
+      [Veredict.CE, "CE", "yellow"],
+      [Veredict.ERROR, "ERROR", "red"]
+    ];
+    const status = labels
+      .map(([verdict, label, color]) => {
+        const count = verdictCounts.get(verdict) ?? 0;
+        return count > 0 ? underlinedHeader(`${count} ${label}`, color) : "";
+      })
+      .filter(Boolean)
+      .join(", ");
+    console.log(card(" Summary ", "cyan"));
+    console.log(
+      `Status : ${status || `${total} UNDETERMINED`}`
+    );
+    console.log(`Time   : ${this.slowestExecutionSeconds.toFixed(6)} sec (peak)`);
+    console.log(
+      `Memory : ${
+        this.maximumMemoryMegabytes === 0
+          ? "unavailable"
+          : `${this.maximumMemoryMegabytes.toFixed(6)} MB (peak)`
+      }`
+    );
+    console.log(styleText("gray", "─".repeat(Math.min(process.stdout.columns || 80, 100))));
   }
 
   static printCompilationErrorMsg(): void {
-    console.log(chalk.bgYellow(chalk.whiteBright(" Compilation Error ")), "\n");
+    console.log(card(" Compilation Error ", "yellow"), "\n");
   }
 
   protected getSegmentedCommand(langExtension: string, debug: boolean): string[] {
@@ -349,12 +573,11 @@ function getOutputDiff(trimmedOutputLines: string[], trimmedAnsLines: string[]) 
     if (trimmedOutputLines[i].length > maxOutputWidth) {
       maxOutputWidth = trimmedOutputLines[i].length;
     }
+
   }
   const columnWidth = Math.min(Math.max(maxOutputWidth, 16), process.stdout.columns - 8);
-  const leftHeader = chalk.bgRed(chalk.whiteBright(Util.padCenter("Your Output", columnWidth)));
-  const rightHeader = chalk.bgGreen(
-    chalk.whiteBright(Util.padCenter("Correct Answer", columnWidth))
-  );
+  const leftHeader = styleText("bgRed", Util.padCenter("Actual Output", columnWidth));
+  const rightHeader = styleText("bgGreen", Util.padCenter("Correct Answer", columnWidth));
   outputDiff += leftHeader + "|" + rightHeader + "\n";
   outputDiff += "".padEnd(columnWidth) + "|" + "".padEnd(columnWidth) + "\n";
   for (let i = 0; i < Math.max(trimmedOutputLines.length, trimmedAnsLines.length); i++) {
@@ -376,12 +599,22 @@ function getOutputDiff(trimmedOutputLines: string[], trimmedAnsLines: string[]) 
       i < trimmedAnsLines.length &&
       trimmedOutputLines[i] === trimmedAnsLines[i]
     ) {
-      line += chalk.bgGreen("  ");
+      line += styleText("bgGreen", "  ");
     } else {
-      line += chalk.bgRed("  ");
+      line += styleText("bgRed", "  ");
     }
 
     outputDiff += line + "\n";
   }
   return outputDiff + "\n";
+}
+
+function getMismatchMessage(outputLines: string[], answerLines: string[]): string {
+  const mismatchIndex = outputLines.findIndex((line, index) => line !== answerLines[index]);
+  const index = mismatchIndex === -1 ? Math.min(outputLines.length, answerLines.length) : mismatchIndex;
+  const output = outputLines[index] ?? "<missing>";
+  const expected = answerLines[index] ?? "<missing>";
+  return (
+    `Mismatch on line ${index + 1}: expected (${JSON.stringify(expected)}) received (${JSON.stringify(output)})\n`
+  );
 }

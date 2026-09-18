@@ -16,8 +16,8 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import Tester from "../Test/TesterFactory/Tester";
-import ICommandGlobalArgs from "../Types/ICommandGlobalArgs";
+import Tester from "../Test/TesterFactory/Tester.js";
+import ICommandGlobalArgs from "../Types/ICommandGlobalArgs.js";
 
 export interface ICommandStatArgs extends ICommandGlobalArgs {
   filePath: string;
